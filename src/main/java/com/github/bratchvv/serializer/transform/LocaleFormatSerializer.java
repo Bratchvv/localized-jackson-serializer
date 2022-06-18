@@ -20,8 +20,14 @@ import java.time.OffsetDateTime;
 import java.util.Date;
 
 /**
+ * Universal serializer that typically serializes all fields,
+ * but also generate new fields with date and money values formatted by locale.
  *
  * @param <T>
+ * @author Vladimir Bratchikov
+ * @see com.github.bratchvv.serializer.transform.api.Localized
+ * @see com.github.bratchvv.serializer.transform.api.MoneyLocalized
+ * @see com.github.bratchvv.serializer.transform.api.DateLocalized
  */
 @Slf4j
 public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<T> {
@@ -29,10 +35,11 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
     private static final String GET_KEY = "get";
 
     /**
+     * Custom implementation of {@link JsonSerializer}
      *
-     * @param value
-     * @param jsonGenerator
-     * @param serializerProvider
+     * @param value data based on {@link Localized}
+     * @param jsonGenerator json generator
+     * @param serializerProvider serializer provider
      */
     @SneakyThrows
     @Override
@@ -42,9 +49,9 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
         var locale = value.getLocale();
         for (Method method : value.getClass().getMethods()) {
             var name = method.getName();
-            if (name.startsWith(GET_KEY) && name.length() > 3) {
+            if (name.startsWith(GET_KEY) && name.length() > 3) { // use only getters
                 var field = getFieldName(name);
-                var getterValue = method.invoke(value);
+                var getterValue = method.invoke(value); // get orig getter value
                 jsonGenerator.writeObjectField(field, getterValue);
 
                 for (Annotation annotation : method.getAnnotations()) {
@@ -56,12 +63,13 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
     }
 
     /**
+     * Process annotations factory for mapping formatted values.
      *
-     * @param jsonGenerator
-     * @param locale
-     * @param field
-     * @param getterValue
-     * @param annotation
+     * @param jsonGenerator json generator
+     * @param locale locale string (IETF BCP 47)
+     * @param field orig field name
+     * @param getterValue orig field value
+     * @param annotation processing annotation.
      * @throws IOException
      */
     private void processAnnotation(JsonGenerator jsonGenerator, String locale, String field, Object getterValue,
@@ -74,12 +82,13 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
     }
 
     /**
+     * Try to map date value.
      *
-     * @param jsonGenerator
-     * @param locale
-     * @param field
-     * @param getterValue
-     * @param dateLocalized
+     * @param jsonGenerator json generator
+     * @param locale locale string (IETF BCP 47)
+     * @param field orig field name
+     * @param getterValue orig field value
+     * @param dateLocalized DateLocalized annotation.
      * @throws IOException
      */
     private void mapDate(JsonGenerator jsonGenerator, String locale, String field,
@@ -97,20 +106,30 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
         } else if (getterValue instanceof OffsetDateTime d) {
             var formatNumber = DateTransformUtils.formatDate(d, locale, dateLocalized.format());
             jsonGenerator.writeObjectField(buildName(field), formatNumber);
+        } else {
+            log.error("Unsupported data type with DateLocalized. Field: {}", field);
         }
     }
 
+    /**
+     * Build formatted field name.
+     *
+     * @param field orig field name
+     * @return xxxxFormatted field name
+     */
     private String buildName(String field) {
         return field + "Formatted";
     }
 
+
     /**
+     * Try to map money value.
      *
-     * @param jsonGenerator
-     * @param locale
-     * @param field
-     * @param getterValue
-     * @param moneyLocalized
+     * @param jsonGenerator json generator
+     * @param locale locale string (IETF BCP 47)
+     * @param field orig field name
+     * @param getterValue orig field value
+     * @param moneyLocalized MoneyLocalized annotation.
      * @throws IOException
      */
     private void mapMoney(JsonGenerator jsonGenerator, String locale, String field,
@@ -125,13 +144,16 @@ public class LocaleFormatSerializer<T extends Localized> extends JsonSerializer<
         } else if (getterValue instanceof Double v) {
             var formatNumber = MoneyTransformUtils.format(v, moneyLocalized.decimalPlaces(), locale);
             jsonGenerator.writeObjectField(buildName(field), formatNumber);
+        } else {
+            log.error("Unsupported data type with MoneyLocalized. Field: {}", field);
         }
     }
 
     /**
+     * Parse field name from getter.
      *
-     * @param name
-     * @return
+     * @param name getter name
+     * @return orig field name
      */
     private String getFieldName(String name) {
         var c = name.substring(3).toCharArray();

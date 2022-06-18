@@ -31,6 +31,7 @@ public class OrderDto implements Localized {
 
     private List<Item> items;
 
+    @Getter(onMethod_ = {@MoneyLocalized}) // TODO this is wrong, but it's using for test
     private Set<String> tags;
 
     @Getter(onMethod_ = {@DateLocalized})
